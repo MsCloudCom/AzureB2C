@@ -44,8 +44,10 @@ namespace AzureB2C
                 options.MinimumSameSitePolicy = SameSiteMode.None;
             });
 
+            //people are always not aware of case sensitivity
+            var b2cSettingsSection = Configuration.GetSection("AzureADB2C") ?? Configuration.GetSection("AzureAdB2C");
             services.AddAuthentication(AzureADB2CDefaults.AuthenticationScheme)
-                .AddAzureADB2C(options => Configuration.Bind("AzureAdB2C", options));
+                .AddAzureADB2C(options => b2cSettingsSection.Bind(options));
 
             #region MyRegion
             #region Fetch AD Groups after authenticated in B2C
