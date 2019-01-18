@@ -7,6 +7,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.AzureADB2C.UI;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -93,6 +94,12 @@ namespace AzureB2C
 
             #endregion
 
+            #region fix-AccessDenied wrong path
+            services.Configure<CookieAuthenticationOptions>(AzureADB2CDefaults.CookieScheme, options =>
+            {
+                options.AccessDeniedPath = "/AzureADB2C/Account/AccessDenied";
+            });
+            #endregion
 
 
             #endregion
