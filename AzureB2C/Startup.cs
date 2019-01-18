@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Net.Http;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.AzureADB2C.UI;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -12,6 +16,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Clients.ActiveDirectory;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace AzureB2C
 {
@@ -38,6 +45,58 @@ namespace AzureB2C
 
             services.AddAuthentication(AzureADB2CDefaults.AuthenticationScheme)
                 .AddAzureADB2C(options => Configuration.Bind("AzureAdB2C", options));
+
+            #region MyRegion
+            #region Fetch AD Groups after authenticated in B2C
+            services.Configure<OpenIdConnectOptions>(AzureADB2CDefaults.OpenIdScheme, options =>
+            {
+                options.Events.OnTokenValidated = async context =>
+                {
+                    if (context.SecurityToken is JwtSecurityToken token) //wjp:lession
+                    {
+                        if (context.Principal.Identity is ClaimsIdentity identity)
+                        {
+                            var authContext = new AuthenticationContext(authority: Configuration["AzureAd:Instance"]);
+                            var credential = new ClientCredential(clientId: Configuration["AzureAd:ClientId"], clientSecret: Configuration["AzureAd:ClientSecret"]);
+
+                            //ADAL then returns an access_token that represents the application's identity.
+                            var authority = "https://graph.windows.net/";
+                            var authResult = await authContext.AcquireTokenAsync(authority, credential);
+
+                            var b2c_user_id = token.Subject;
+                            var domain = Configuration["AzureAd:Domain"]; // azureADOptions.Domain;
+                            string url = $"https://graph.windows.net/{domain}/users/{b2c_user_id}/memberOf?api-version=1.6";
+                            var httpClient = new HttpClient();
+                            var request = new HttpRequestMessage(HttpMethod.Get, url);
+                            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", authResult.AccessToken);
+                            var response = await httpClient.SendAsync(request);
+
+                            var content = await response.Content.ReadAsStringAsync();
+
+                            var jsonSettings = new JsonSerializerSettings() { Formatting = Formatting.Indented, };
+
+                            var formatted = JObject.Parse(content);
+                            var jo_groups = formatted["value"] as JArray;
+
+                            var claimsIdentity = (ClaimsIdentity)context.Principal.Identity;
+
+                            foreach (var item in jo_groups)
+                            {
+                                var groupName = (string)item["displayName"];
+                                claimsIdentity.AddClaim(new Claim(type: ClaimTypes.Role, value: groupName));
+                            }
+                            logger.LogDebug(JsonConvert.SerializeObject(formatted, Formatting.Indented));
+                        }
+                    }
+                };
+            });
+
+            #endregion
+
+
+
+            #endregion
+
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
         }
