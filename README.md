@@ -17,7 +17,7 @@ ASP.NET Core Web Application, Azure AD B2C as IdP, Azure Active Directory as Rol
 
 ## Run the Sample
 
-* C:\Users\Username\source\repos\> git clone  https://github.com/MsCloudCom/Azure-B2C-Sample.git
+* C:\Users\Username\source\repos\> git clone  https://github.com/MsCloudCom/AzureB2C.git
 * Open the solution in Visual Studio
 * configure appsettings.json
 * press Ctrl+F5 to run the application
