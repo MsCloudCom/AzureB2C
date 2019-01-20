@@ -39,7 +39,7 @@ namespace AzureB2C
         {
             services.Configure<CookiePolicyOptions>(options =>
             {
-                
+
                 options.CheckConsentNeeded = context => true;// This lambda determines whether user consent for non-essential cookies is needed for a given request.
                 options.MinimumSameSitePolicy = SameSiteMode.None;
             });
@@ -50,6 +50,23 @@ namespace AzureB2C
                 .AddAzureADB2C(options => b2cSettingsSection.Bind(options));
 
             #region MyRegion
+            AddRoleFromAd(services);
+            #region fix-AccessDenied wrong path
+            services.Configure<CookieAuthenticationOptions>(AzureADB2CDefaults.CookieScheme, options =>
+            {
+                options.AccessDeniedPath = "/AzureADB2C/Account/AccessDenied";
+            });
+            #endregion
+
+
+            #endregion
+
+
+            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+        }
+
+        private void AddRoleFromAd(IServiceCollection services)
+        {
             #region Fetch AD Groups after authenticated in B2C
             services.Configure<OpenIdConnectOptions>(AzureADB2CDefaults.OpenIdScheme, options =>
             {
@@ -95,19 +112,6 @@ namespace AzureB2C
             });
 
             #endregion
-
-            #region fix-AccessDenied wrong path
-            services.Configure<CookieAuthenticationOptions>(AzureADB2CDefaults.CookieScheme, options =>
-            {
-                options.AccessDeniedPath = "/AzureADB2C/Account/AccessDenied";
-            });
-            #endregion
-
-
-            #endregion
-
-
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
         }
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)

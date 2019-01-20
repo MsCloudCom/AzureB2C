@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace AzureB2C.Pages
 {
-    [Authorize(Roles = "myB2cRole-PowerUserRole2")]
+    [Authorize(Roles = "myB2cRole-PowerUserRole")]
     public class PrivacyModel : PageModel
     {
         public void OnGet()
