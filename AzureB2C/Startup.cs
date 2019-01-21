@@ -51,22 +51,49 @@ namespace AzureB2C
                 .AddAzureADB2C(options => b2cSettingsSection.Bind(options));
 
             #region MyRegion
-
             AddRole_AadApi(services);
 
-            #region fix-AccessDenied wrong path
-            services.Configure<CookieAuthenticationOptions>(AzureADB2CDefaults.CookieScheme, options =>
-            {
-                options.AccessDeniedPath = "/AzureADB2C/Account/AccessDenied";
-            });
-            #endregion
-
-
+            fixAccessDenied(services);
             #endregion
 
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
         }
+
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseExceptionHandler("/Error");
+
+                app.UseHsts();// The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+            }
+
+            app.UseHttpsRedirection();
+            app.UseStaticFiles();
+            app.UseCookiePolicy();
+
+            app.UseAuthentication();
+
+            app.UseMvc();
+        }
+
+        /// <summary>
+        /// fix AccessDenied wrong path(a small bug, PR approved already).
+        /// </summary>
+        /// <param name="services"></param>
+        private static void fixAccessDenied(IServiceCollection services)
+        {
+            services.Configure<CookieAuthenticationOptions>(AzureADB2CDefaults.CookieScheme, options =>
+            {
+                options.AccessDeniedPath = "/AzureADB2C/Account/AccessDenied";
+            });
+        }
+
         /// <summary>
         /// Fetch AD Groups (using Azure AD Graph web api) after authenticated in B2C
         /// </summary>
@@ -174,27 +201,6 @@ namespace AzureB2C
                 };
             });
 
-        }
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
-        {
-            if (env.IsDevelopment())
-            {
-                app.UseDeveloperExceptionPage();
-            }
-            else
-            {
-                app.UseExceptionHandler("/Error");
-
-                app.UseHsts();// The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-            }
-
-            app.UseHttpsRedirection();
-            app.UseStaticFiles();
-            app.UseCookiePolicy();
-
-            app.UseAuthentication();
-
-            app.UseMvc();
         }
     }
 }
