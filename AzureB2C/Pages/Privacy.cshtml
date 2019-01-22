@@ -1,8 +1,25 @@
 ﻿@page
 @model PrivacyModel
+@using System.Security.Claims
 @{
     ViewData["Title"] = "Privacy Policy";
+    var roles = User.Claims.Where(x => x.Type == ClaimTypes.Role);
+
 }
 <h1>@ViewData["Title"]</h1>
 
-<p>Use this page to detail your site's privacy policy.</p>
+<p>Welcome @User.Identity.Name ! You have the following Roles</p>
+
+<div class="container">
+    <table class="table table-bordered">
+        <thead><tr><th>Role name</th></tr></thead>
+        @foreach (var item in roles)
+        {
+            <tr><td>@item.Value</td></tr>
+
+        }
+    </table>
+
+</div>
+
+
