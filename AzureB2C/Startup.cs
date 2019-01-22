@@ -22,7 +22,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Client;
-using Microsoft.IdentityModel.Clients.ActiveDirectory;
+//using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -49,19 +49,19 @@ namespace AzureB2C
                 options.MinimumSameSitePolicy = SameSiteMode.None;
             });
 
-            //people are always not aware of case sensitivity
-            var b2cConfigurationSection = Configuration.GetSection("AzureADB2C") ?? Configuration.GetSection("AzureAdB2C");
-
-            services.AddAuthentication(AzureADB2CDefaults.AuthenticationScheme)
-                .AddAzureADB2C(options => { b2cConfigurationSection.Bind(options); })
-                //.AddAzureADB2CBearer(x => { })
-                ;
-
             #region MyRegion
+            //people are always not aware of case sensitivity
+            var b2cConfig = Configuration.GetSection("AzureADB2C") ?? Configuration.GetSection("AzureAdB2C");
+            services
+                .AddAuthentication(AzureADB2CDefaults.AuthenticationScheme)
+                .AddAzureADB2C(options => { b2cConfig.Bind(options); });
+
             //after: AddAzureADB2C
             var sp = services.BuildServiceProvider();
             var azureADB2COptions = sp.GetService<IOptionsMonitor<AzureADB2COptions>>().Get(AzureADB2CDefaults.AuthenticationScheme);
-            //var openIdConnectOptions = sp.GetService<IOptionsMonitor<OpenIdConnectOptions>>().Get(AzureADB2CDefaults.AuthenticationScheme);
+
+            ApiHelper.InitAsync(Configuration, "AzureAD").Wait();
+
             AddRole_B2c(services, azureADB2COptions);
 
 
@@ -113,94 +113,23 @@ namespace AzureB2C
             {
                 options.Events.OnTokenValidated = async context =>
                 {
-                    var code = context.ProtocolMessage.Code;
-                    var accessToken = await getAdTokenAsync();
 
                     var userId = context.Principal.FindFirst(ClaimTypes.NameIdentifier).Value;
                     var claimsIdentity = (ClaimsIdentity)context.Principal.Identity;
 
-                    //TokenCache userTokenCache = new MSALSessionCache(signedInUserID, context.HttpContext).GetMsalCacheInstance();
-                    //ConfidentialClientApplication cca = new ConfidentialClientApplication(
-                    //      clientId: azureADB2COptions.ClientId,
-                    //      authority: options.Authority,
-                    //      redirectUri: options.CallbackPath,
-                    //      clientCredential: new Microsoft.Identity.Client.ClientCredential(azureADB2COptions.ClientSecret),
-                    //      userTokenCache: null,
-                    //      appTokenCache: null);
-                    //try
-                    //{
-                    //    Microsoft.Identity.Client.AuthenticationResult result = await cca.AcquireTokenByAuthorizationCodeAsync(code, options.Scope);
-                    //    context.HandleCodeRedemption(result.AccessToken, result.IdToken);
+                    string requestUrl = $"https://graph.microsoft.com/v1.0/users/{userId}/memberOf?$select=displayName";
+                    var resObject = await ApiHelper.getApiASync(requestUrl);
+                    var jo_groups = resObject["value"] as JArray;
 
-                    //}
-                    //catch (Exception ex)
-                    //{
-
-                    //    throw ex;
-                    //}
-
-                    using (var client = new HttpClient())
+                    foreach (var item in jo_groups)
                     {
-                        string requestUrl = $"https://graph.microsoft.com/v1.0/users/{userId}/memberOf?$select=displayName";
-                        //requestUrl = $"https://graph.windows.net/myB2cTenant.onmicrosoft.com/users/{userId}/memberOf?api-version=1.6";
-                        requestUrl = $"https://graph.windows.net/{azureADB2COptions.Domain}/users/{userId}/memberOf?api-version=1.6";
-                        //requestUrl = "https://graph.microsoft.com/v1.0/me/memberOf";
-
-                        HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
-                        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-                        HttpResponseMessage response = await client.SendAsync(request);
-                        var content = await response.Content.ReadAsStringAsync();
-
-                        var jsonSettings = new JsonSerializerSettings() { Formatting = Formatting.Indented, };
-                        if (response.IsSuccessStatusCode)
-                        {
-                            var formatted = JObject.Parse(content);
-                            var jo_groups = formatted["value"] as JArray;
-
-                            foreach (var item in jo_groups)
-                            {
-                                var groupName = (string)item["displayName"];
-                                claimsIdentity.AddClaim(new Claim(type: ClaimTypes.Role, value: groupName));
-                            }
-                        }
-                        else
-                        {
-                            logger.LogWarning($"{response.StatusCode}: {requestUrl}");
-                            logger.LogWarning($"   {response.Content}");
-                        }
+                        var groupName = (string)item["displayName"];
+                        claimsIdentity.AddClaim(new Claim(type: ClaimTypes.Role, value: groupName));
                     }
+
                 };
             });
 
-        }
-
-        /// <summary>
-        /// ADAL
-        /// </summary>
-        /// <param name="azureADB2COptions"></param>
-        /// <returns>returns an access_token that represents the application's identity.</returns>
-        private async Task<string> getAdTokenAsync(string azureAdSectionName = null)
-        {
-            azureAdSectionName = azureAdSectionName ?? AzureADDefaults.AuthenticationScheme;
-            var adSection = Configuration.GetSection(azureAdSectionName) ?? Configuration.GetSection("AzureAD") ?? Configuration.GetSection("AzureAd");
-            var clientId = adSection["ClientId"];
-            if (string.IsNullOrWhiteSpace(clientId)) { throw new Exception($"require configuration for AzureAD.ClientId"); }
-            var clientSecret = adSection["ClientSecret"];
-            if (string.IsNullOrWhiteSpace(clientSecret)) { throw new Exception($"require configuration for AzureAD.ClientSecret"); }
-
-            //var instance = adSection["Instance"];
-            //if (string.IsNullOrWhiteSpace(instance)) { throw new Exception($"require configuration for AzureAD.Instance"); }
-
-            var authContext = new AuthenticationContext(authority: adSection["Instance"]);
-            var credential = new Microsoft.IdentityModel.Clients.ActiveDirectory.ClientCredential(
-                clientId: clientId,
-                clientSecret: clientSecret
-                );
-            var authority = adSection["Authority"] ?? "https://graph.windows.net/";
-            var authResult = await authContext.AcquireTokenAsync(resource: authority, clientCredential: credential);
-
-            return authResult.AccessToken;
         }
     }
 }
